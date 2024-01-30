@@ -1,0 +1,25 @@
+Parameters:
+  LatestAmiId:
+    Description: 'AMI for EC2'
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: '10.8.0.0/16'
+      EnableDnsHostnames: 'true'
+      EnableDnsSupport: 'true'
+  Subnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref 'VPC'
+      CidrBlock: '10.8.0.0/24'
+      AvailabilityZone: 'us-east-1a'
+  TestEC21:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: 't2.micro'
+      ImageId: !Ref 'LatestAmiId'
+      SubnetId: !Ref 'Subnet'
+
