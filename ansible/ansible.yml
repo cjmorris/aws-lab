@@ -1,44 +1,115 @@
 Parameters:
   LatestAmiId:
     Description: 'AMI for EC2'
-    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.8.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: CustomVPC
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.8.0.0/24
+      AvailabilityZone: us-east-1a
+      Tags:
+        - Key: Name
+          Value: CustomSubnetA
+  SecurityGroupEC2Instance:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'SG for EC2 Instances'
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+      - CidrIp: 0.0.0.0/0 
+        FromPort: 443
+        ToPort: 443
+        IpProtocol: tcp
+  SecurityGroupVPCEndpoint:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'SG for VPC Endpoints'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - SourceSecurityGroupId: !Ref SecurityGroupEC2Instance
+        FromPort: 443
+        ToPort: 443
+        IpProtocol: tcp
+      SecurityGroupEgress:
+      - CidrIp: 0.0.0.0/0 
+        FromPort: 443
+        ToPort: 443
+        IpProtocol: tcp
+  SSMVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssm
+      VpcId: !Ref VPC
+      SubnetIds:
+        - !Ref Subnet
+      SecurityGroupIds:
+        - !Ref SecurityGroupVPCEndpoint
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: True
+  SSMMessagesVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssmmessages
+      VpcId: !Ref VPC
+      SubnetIds:
+        - !Ref Subnet
+      SecurityGroupIds:
+        - !Ref SecurityGroupVPCEndpoint
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: True
+  EC2MessagesVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ec2messages
+      VpcId: !Ref VPC
+      SubnetIds:
+        - !Ref Subnet
+      SecurityGroupIds:
+        - !Ref SecurityGroupVPCEndpoint
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: True
   SSMInstanceRole:
-    Type: 'AWS::IAM::Role'
+    Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Effect: 'Allow'
+          - Effect: Allow
             Principal:
               Service:
-                - 'ec2.amazonaws.com'
+                - ec2.amazonaws.com
             Action:
-              - 'sts:AssumeRole'
+              - sts:AssumeRole
       Path: /
-      ManagedPolicyArns: ['arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore']
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
   SSMInstanceProfile:
-    Type: 'AWS::IAM::InstanceProfile'
+    Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
         - !Ref SSMInstanceRole
-  VPC:
-    Type: 'AWS::EC2::VPC'
-    Properties:
-      CidrBlock: '10.8.0.0/16'
-      EnableDnsHostnames: 'true'
-      EnableDnsSupport: 'true'
-  Subnet:
-    Type: 'AWS::EC2::Subnet'
-    Properties:
-      VpcId: !Ref 'VPC'
-      CidrBlock: '10.8.0.0/24'
-      AvailabilityZone: 'us-east-1a'
   TestEC21:
-    Type: 'AWS::EC2::Instance'
+    Type: AWS::EC2::Instance
     Properties:
-      InstanceType: 't2.micro'
-      ImageId: !Ref 'LatestAmiId'
-      SubnetId: !Ref 'Subnet'
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      SubnetId: !Ref Subnet
+      SecurityGroupIds:
+        - !Ref SecurityGroupEC2Instance
+      Tags:
+        - Key: Name
+          Value: TestInstance1
 
