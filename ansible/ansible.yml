@@ -4,6 +4,9 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 Resources:
+
+##### VPC setup resources #####
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -13,53 +16,99 @@ Resources:
       Tags:
         - Key: Name
           Value: CustomVPC
-  Subnet:
+  PrivateSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.8.0.0/24
+      CidrBlock: 10.8.16.0/20
       AvailabilityZone: us-east-1a
       Tags:
         - Key: Name
-          Value: CustomSubnetA
-  SSMVPCEndpoint:
-    Type: AWS::EC2::VPCEndpoint
+          Value: CustomPrivateSubnetA
+  PublicSubnetA: 
+    Type: AWS::EC2::Subnet
     Properties:
-      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssm
       VpcId: !Ref VPC
-      SubnetIds:
-        - !Ref Subnet
-      SecurityGroupIds:
-        - !Ref InstanceSecurityGroup
-      VpcEndpointType: Interface
-      PrivateDnsEnabled: True
-  SSMMessagesVPCEndpoint:
-    Type: AWS::EC2::VPCEndpoint
+      CidrBlock: 10.8.0.0/20
+      AvailabilityZone: us-east-1a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: CustomPublicSubnetA
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
     Properties:
-      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssmmessages
-      VpcId: !Ref VPC
-      SubnetIds:
-        - !Ref Subnet
-      SecurityGroupIds:
-        - !Ref InstanceSecurityGroup
-      VpcEndpointType: Interface
-      PrivateDnsEnabled: True
-  EC2MessagesVPCEndpoint:
-    Type: AWS::EC2::VPCEndpoint
+      Tags:
+      - Key: Name
+        Value: CustomIGW
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      ServiceName: !Sub com.amazonaws.${AWS::Region}.ec2messages
       VpcId: !Ref VPC
-      SubnetIds:
-        - !Ref Subnet
-      SecurityGroupIds:
-        - !Ref InstanceSecurityGroup
-      VpcEndpointType: Interface
-      PrivateDnsEnabled: True
+      InternetGatewayId: !Ref InternetGateway
+  RouteTablePublic: 
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: CustomRouteTablePublic
+  RouteTablePublicDefault: 
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId:
+        Ref: RouteTablePublic
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+  RouteTableAssociationPublicA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId:
+        Ref: RouteTablePublic
+  RouteTablePrivate: 
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: CustomRouteTablePrivate
+  RouteTablePrivateDefault: 
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: RouteTablePrivate
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATGateway
+  RouteTableAssociationPrivateA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId:
+        Ref: RouteTablePrivate 
+  NATGateway:
+   Type: AWS::EC2::NatGateway
+   Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+      - Key: Name
+        Value: CustomNAT
+  NATGatewayEIP:
+   Type: AWS::EC2::EIP
+   Properties:
+      Domain: vpc
+
+##### Instance role and security group setup #####
+
   SSMInstanceRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -85,23 +134,50 @@ Resources:
           IpProtocol: tcp
           FromPort: '22'
           ToPort: '22'
-          CidrIp: '0.0.0.0/0'
+          CidrIp: !GetAtt PrivateSubnetA.CidrBlock
   InstanceSecurityGroupSelfReferenceRule:
     Type: "AWS::EC2::SecurityGroupIngress"
     Properties:
       GroupId: !Ref InstanceSecurityGroup
       IpProtocol: '-1'
       SourceSecurityGroupId: !Ref InstanceSecurityGroup
-  TestEC21:
+
+##### EC2 INSTANCES #####
+
+  AnsibleInstance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
       ImageId: !Ref LatestAmiId
       IamInstanceProfile: !Ref SSMInstanceProfile
-      SubnetId: !Ref Subnet
+      SubnetId: !Ref PrivateSubnetA
       SecurityGroupIds:
         - !Ref InstanceSecurityGroup
       Tags:
         - Key: Name
-          Value: TestInstance1
+          Value: AnsibleInstance
+  DummyInstance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      SubnetId: !Ref PrivateSubnetA
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      Tags:
+        - Key: Name
+          Value: DummyInstance1
+  DummyInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      SubnetId: !Ref PrivateSubnetA
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      Tags:
+        - Key: Name
+          Value: DummyInstance2
 
