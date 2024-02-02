@@ -22,31 +22,6 @@ Resources:
       Tags:
         - Key: Name
           Value: CustomSubnetA
-  SecurityGroupEC2Instance:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'SG for EC2 Instances'
-      VpcId: !Ref VPC
-      SecurityGroupEgress:
-      - CidrIp: 0.0.0.0/0 
-        FromPort: 443
-        ToPort: 443
-        IpProtocol: tcp
-  SecurityGroupVPCEndpoint:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'SG for VPC Endpoints'
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-      - SourceSecurityGroupId: !Ref SecurityGroupEC2Instance
-        FromPort: 443
-        ToPort: 443
-        IpProtocol: tcp
-      SecurityGroupEgress:
-      - CidrIp: 0.0.0.0/0 
-        FromPort: 443
-        ToPort: 443
-        IpProtocol: tcp
   SSMVPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -55,7 +30,7 @@ Resources:
       SubnetIds:
         - !Ref Subnet
       SecurityGroupIds:
-        - !Ref SecurityGroupVPCEndpoint
+        - !Ref InstanceSecurityGroup
       VpcEndpointType: Interface
       PrivateDnsEnabled: True
   SSMMessagesVPCEndpoint:
@@ -66,7 +41,7 @@ Resources:
       SubnetIds:
         - !Ref Subnet
       SecurityGroupIds:
-        - !Ref SecurityGroupVPCEndpoint
+        - !Ref InstanceSecurityGroup
       VpcEndpointType: Interface
       PrivateDnsEnabled: True
   EC2MessagesVPCEndpoint:
@@ -77,7 +52,7 @@ Resources:
       SubnetIds:
         - !Ref Subnet
       SecurityGroupIds:
-        - !Ref SecurityGroupVPCEndpoint
+        - !Ref InstanceSecurityGroup
       VpcEndpointType: Interface
       PrivateDnsEnabled: True
   SSMInstanceRole:
@@ -100,6 +75,23 @@ Resources:
     Properties:
       Roles:
         - !Ref SSMInstanceRole
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: 'Enable SSH access'
+      SecurityGroupIngress:
+        - Description: 'Allow SSH IPv4 IN'
+          IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: '0.0.0.0/0'
+  InstanceSecurityGroupSelfReferenceRule:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      GroupId: !Ref InstanceSecurityGroup
+      IpProtocol: '-1'
+      SourceSecurityGroupId: !Ref InstanceSecurityGroup
   TestEC21:
     Type: AWS::EC2::Instance
     Properties:
@@ -108,7 +100,7 @@ Resources:
       IamInstanceProfile: !Ref SSMInstanceProfile
       SubnetId: !Ref Subnet
       SecurityGroupIds:
-        - !Ref SecurityGroupEC2Instance
+        - !Ref InstanceSecurityGroup
       Tags:
         - Key: Name
           Value: TestInstance1
