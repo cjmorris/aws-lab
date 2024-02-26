@@ -18,14 +18,14 @@ terraform {
 }
 
 provider "aws" {
-  region  = "us-east-1"
+  region  = var.region
 }
 
 # Non TF state related resources
 
 resource "aws_instance" "test_instance_1" {
-  ami           = "ami-0440d3b780d96b29d"
-  instance_type = "t2.micro"
+  ami           = var.ami
+  instance_type = var.instance_type
 
   tags = {
     Name = "TestInstance1"
@@ -33,8 +33,8 @@ resource "aws_instance" "test_instance_1" {
 }
 
 resource "aws_instance" "test_instance_2" {
-  ami           = "ami-0440d3b780d96b29d"
-  instance_type = "t2.micro"
+  ami           = var.ami
+  instance_type = var.instance_type
 
   tags = {
     Name = "TestInstance2"
